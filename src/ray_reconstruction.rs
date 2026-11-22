@@ -12,6 +12,7 @@ use wgpu::{
 pub struct DlssRayReconstruction {
     upscaled_resolution: [u32; 2],
     render_resolution: [u32; 2],
+    output_subrects: bool,
     device: Device,
     sdk: Arc<Mutex<DlssSdk>>,
     feature: *mut NVSDK_NGX_Handle,
@@ -118,6 +119,7 @@ impl DlssRayReconstruction {
         Ok(Self {
             upscaled_resolution,
             render_resolution: optimal_render_resolution,
+            output_subrects: feature_flags.contains(DlssFeatureFlags::OutputSubrect),
             device: device.clone(),
             sdk: Arc::clone(&sdk),
             feature,
@@ -140,13 +142,15 @@ impl DlssRayReconstruction {
         command_encoder: &mut CommandEncoder,
         adapter: &Adapter,
     ) -> Result<CommandBuffer, DlssError> {
-        render_parameters.validate()?;
+        render_parameters.validate(self.output_subrects)?;
 
         let sdk = self.sdk.lock().unwrap();
 
         let partial_texture_size = render_parameters
             .partial_texture_size
             .unwrap_or(self.render_resolution);
+        let input_base = subrect_base(render_parameters.partial_texture_origin);
+        let output_base = subrect_base(render_parameters.dlss_output_origin);
 
         // NGX reads these through raw pointers during EvaluateFeature. The bindings
         // must stay alive until the evaluate call below.
@@ -237,23 +241,23 @@ impl DlssRayReconstruction {
             pInTransparencyMask: ptr::null_mut(),
             pInExposureTexture: ptr::null_mut(),
             pInBiasCurrentColorMask: ptr::null_mut(),
-            InAlphaSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InOutputAlphaSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDiffuseAlbedoSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InSpecularAlbedoSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InNormalsSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InRoughnessSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDepthSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InMVSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InTranslucencySubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InBiasCurrentColorSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InOutputSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InAlphaSubrectBase: input_base,
+            InOutputAlphaSubrectBase: output_base,
+            InDiffuseAlbedoSubrectBase: input_base,
+            InSpecularAlbedoSubrectBase: input_base,
+            InNormalsSubrectBase: input_base,
+            InRoughnessSubrectBase: input_base,
+            InColorSubrectBase: input_base,
+            InDepthSubrectBase: input_base,
+            InMVSubrectBase: input_base,
+            InTranslucencySubrectBase: input_base,
+            InBiasCurrentColorSubrectBase: input_base,
+            InOutputSubrectBase: output_base,
             InPreExposure: 0.0,
             InExposureScale: 0.0,
             InIndicatorInvertXAxis: 0,
             InIndicatorInvertYAxis: 0,
-            InResponsivityMaskSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InResponsivityMaskSubrectBase: input_base,
             pInReflectedAlbedo: ptr::null_mut(),
             pInColorBeforeParticles: ptr::null_mut(),
             pInColorAfterParticles: ptr::null_mut(),
@@ -284,34 +288,28 @@ impl DlssRayReconstruction {
             pInSpecularRayDirection: ptr::null_mut(),
             pInDiffuseRayDirectionHitDistance: ptr::null_mut(),
             pInSpecularRayDirectionHitDistance: ptr::null_mut(),
-            InReflectedAlbedoSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeParticlesSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorAfterParticlesSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeTransparencySubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorAfterTransparencySubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeFogSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorAfterFogSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InScreenSpaceSubsurfaceScatteringGuideSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeScreenSpaceSubsurfaceScatteringSubrectBase: NVSDK_NGX_Coordinates {
-                X: 0,
-                Y: 0,
-            },
-            InColorAfterScreenSpaceSubsurfaceScatteringSubrectBase: NVSDK_NGX_Coordinates {
-                X: 0,
-                Y: 0,
-            },
-            InScreenSpaceRefractionGuideSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeScreenSpaceRefractionSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorAfterScreenSpaceRefractionSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDepthOfFieldGuideSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorBeforeDepthOfFieldSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InColorAfterDepthOfFieldSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDiffuseHitDistanceSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InSpecularHitDistanceSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDiffuseRayDirectionSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InSpecularRayDirectionSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDiffuseRayDirectionHitDistanceSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InSpecularRayDirectionHitDistanceSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InReflectedAlbedoSubrectBase: input_base,
+            InColorBeforeParticlesSubrectBase: input_base,
+            InColorAfterParticlesSubrectBase: input_base,
+            InColorBeforeTransparencySubrectBase: input_base,
+            InColorAfterTransparencySubrectBase: input_base,
+            InColorBeforeFogSubrectBase: input_base,
+            InColorAfterFogSubrectBase: input_base,
+            InScreenSpaceSubsurfaceScatteringGuideSubrectBase: input_base,
+            InColorBeforeScreenSpaceSubsurfaceScatteringSubrectBase: input_base,
+            InColorAfterScreenSpaceSubsurfaceScatteringSubrectBase: input_base,
+            InScreenSpaceRefractionGuideSubrectBase: input_base,
+            InColorBeforeScreenSpaceRefractionSubrectBase: input_base,
+            InColorAfterScreenSpaceRefractionSubrectBase: input_base,
+            InDepthOfFieldGuideSubrectBase: input_base,
+            InColorBeforeDepthOfFieldSubrectBase: input_base,
+            InColorAfterDepthOfFieldSubrectBase: input_base,
+            InDiffuseHitDistanceSubrectBase: input_base,
+            InSpecularHitDistanceSubrectBase: input_base,
+            InDiffuseRayDirectionSubrectBase: input_base,
+            InSpecularRayDirectionSubrectBase: input_base,
+            InDiffuseRayDirectionHitDistanceSubrectBase: input_base,
+            InSpecularRayDirectionHitDistanceSubrectBase: input_base,
             pInWorldToViewMatrix: world_to_view
                 .as_mut()
                 .map_or(ptr::null_mut(), |matrix| ptr::from_mut(matrix).cast()),
@@ -335,15 +333,15 @@ impl DlssRayReconstruction {
             pInTransparencyLayer: transparency_layer
                 .as_mut()
                 .map_or(ptr::null_mut(), ptr::from_mut),
-            InTransparencyLayerSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InTransparencyLayerSubrectBase: input_base,
             pInTransparencyLayerOpacity: transparency_layer_opacity
                 .as_mut()
                 .map_or(ptr::null_mut(), ptr::from_mut),
-            InTransparencyLayerOpacitySubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InTransparencyLayerOpacitySubrectBase: input_base,
             pInTransparencyLayerMvecs: ptr::null_mut(),
-            InTransparencyLayerMvecsSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InTransparencyLayerMvecsSubrectBase: input_base,
             pInDisocclusionMask: ptr::null_mut(),
-            InDisocclusionMaskSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InDisocclusionMaskSubrectBase: input_base,
         };
 
         command_encoder.transition_resources(iter::empty(), render_parameters.barrier_list());
@@ -490,6 +488,15 @@ pub struct DlssRayReconstructionRenderParameters<'a> {
     /// Optionally use only a specific subrect of the input textures, rather than the whole textures.
     // TODO: Allow configuring partial texture origins
     pub partial_texture_size: Option<[u32; 2]>,
+    /// The top-left corner of the subrect of the input textures, in pixels. Defaults to `[0, 0]`.
+    ///
+    /// The same corner is used for every input texture.
+    pub partial_texture_origin: Option<[u32; 2]>,
+    /// The top-left corner of the subrect of [`Self::dlss_output`] (and [`Self::dlss_output_alpha`]) that DLSS writes to, in pixels. Defaults to `[0, 0]`.
+    ///
+    /// The subrect has the size of [`DlssRayReconstruction::upscaled_resolution`].
+    /// A corner other than `[0, 0]` requires [`DlssFeatureFlags::OutputSubrect`] when the context is created.
+    pub dlss_output_origin: Option<[u32; 2]>,
     /// Optional scaling factor to apply to the values contained within [`Self::motion_vectors`].
     pub motion_vector_scale: Option<[f32; 2]>,
 }
@@ -523,8 +530,14 @@ pub enum DlssRayReconstructionTransparencyOverlay<'a> {
 }
 
 impl<'a> DlssRayReconstructionRenderParameters<'a> {
-    fn validate(&self) -> Result<(), DlssError> {
-        // TODO
+    fn validate(&self, output_subrects: bool) -> Result<(), DlssError> {
+        if !output_subrects
+            && self
+                .dlss_output_origin
+                .is_some_and(|origin| origin != [0, 0])
+        {
+            return Err(DlssError::InvalidParameters);
+        }
         Ok(())
     }
 
