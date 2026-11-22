@@ -16,6 +16,7 @@ pub struct DlssSuperResolution {
     optimal_render_resolution: [u32; 2],
     min_render_resolution: [u32; 2],
     max_render_resolution: [u32; 2],
+    output_subrects: bool,
     device: Device,
     sdk: Arc<Mutex<DlssSdk>>,
     feature: *mut NVSDK_NGX_Handle,
@@ -101,6 +102,7 @@ impl DlssSuperResolution {
             optimal_render_resolution,
             min_render_resolution,
             max_render_resolution,
+            output_subrects: feature_flags.contains(DlssFeatureFlags::OutputSubrect),
             device: device.clone(),
             sdk: Arc::clone(&sdk),
             feature,
@@ -123,13 +125,15 @@ impl DlssSuperResolution {
         command_encoder: &mut CommandEncoder,
         adapter: &Adapter,
     ) -> Result<CommandBuffer, DlssError> {
-        render_parameters.validate()?;
+        render_parameters.validate(self.output_subrects)?;
 
         let sdk = self.sdk.lock().unwrap();
 
         let partial_texture_size = render_parameters
             .partial_texture_size
             .unwrap_or(self.max_render_resolution);
+        let input_base = subrect_base(render_parameters.partial_texture_origin);
+        let output_base = subrect_base(render_parameters.dlss_output_origin);
 
         // NGX reads these through raw pointers during EvaluateFeature. The bindings
         // must stay alive until the evaluate call below.
@@ -173,12 +177,12 @@ impl DlssSuperResolution {
             pInTransparencyMask: ptr::null_mut(),
             pInExposureTexture: exposure.as_mut().map_or(ptr::null_mut(), ptr::from_mut),
             pInBiasCurrentColorMask: bias.as_mut().map_or(ptr::null_mut(), ptr::from_mut),
-            InColorSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InDepthSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InMVSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InTranslucencySubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InBiasCurrentColorSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
-            InOutputSubrectBase: NVSDK_NGX_Coordinates { X: 0, Y: 0 },
+            InColorSubrectBase: input_base,
+            InDepthSubrectBase: input_base,
+            InMVSubrectBase: input_base,
+            InTranslucencySubrectBase: input_base,
+            InBiasCurrentColorSubrectBase: input_base,
+            InOutputSubrectBase: output_base,
             InPreExposure: pre_exposure,
             InExposureScale: exposure_scale,
             InIndicatorInvertXAxis: 0,
@@ -284,8 +288,16 @@ pub struct DlssSuperResolutionRenderParameters<'a> {
     /// Subpixel jitter that was applied to your camera.
     pub jitter_offset: [f32; 2],
     /// Optionally use only a specific subrect of the input textures, rather than the whole textures.
-    // TODO: Allow configuring partial texture origins
     pub partial_texture_size: Option<[u32; 2]>,
+    /// The top-left corner of the subrect of the input textures, in pixels. Defaults to `[0, 0]`.
+    ///
+    /// The same corner is used for every input texture.
+    pub partial_texture_origin: Option<[u32; 2]>,
+    /// The top-left corner of the subrect of [`Self::dlss_output`] that DLSS writes to, in pixels. Defaults to `[0, 0]`.
+    ///
+    /// The subrect has the size of [`DlssSuperResolution::upscaled_resolution`].
+    /// A corner other than `[0, 0]` requires [`DlssFeatureFlags::OutputSubrect`] when the context is created.
+    pub dlss_output_origin: Option<[u32; 2]>,
     /// Optional scaling factor to apply to the values contained within [`Self::motion_vectors`].
     pub motion_vector_scale: Option<[f32; 2]>,
 }
@@ -303,8 +315,14 @@ pub enum DlssSuperResolutionExposure<'a> {
 }
 
 impl<'a> DlssSuperResolutionRenderParameters<'a> {
-    fn validate(&self) -> Result<(), DlssError> {
-        // TODO
+    fn validate(&self, output_subrects: bool) -> Result<(), DlssError> {
+        if !output_subrects
+            && self
+                .dlss_output_origin
+                .is_some_and(|origin| origin != [0, 0])
+        {
+            return Err(DlssError::InvalidParameters);
+        }
         Ok(())
     }
 

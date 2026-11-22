@@ -247,6 +247,12 @@ pub fn texture_to_ngx(texture_view: &TextureView, adapter: &Adapter) -> NVSDK_NG
     }
 }
 
+/// The corner of a subrect as NGX takes it, `[0, 0]` when none is given.
+pub fn subrect_base(origin: Option<[u32; 2]>) -> NVSDK_NGX_Coordinates {
+    let [x, y] = origin.unwrap_or([0, 0]);
+    NVSDK_NGX_Coordinates { X: x, Y: y }
+}
+
 pub fn halton_sequence(mut index: u32, base: u32) -> f32 {
     let mut f = 1.0;
     let mut result = 0.0;
