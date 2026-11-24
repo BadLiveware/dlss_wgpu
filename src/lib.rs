@@ -75,6 +75,6 @@ pub use initialization::{
     register_instance_extensions, request_device,
 };
 #[cfg(not(feature = "mock"))]
-pub use nvsdk_ngx::{DlssError, DlssFeatureFlags, DlssPerfQualityMode};
+pub use nvsdk_ngx::{DlssError, DlssFeatureFlags, DlssPerfQualityMode, DlssRenderPreset};
 #[cfg(not(feature = "mock"))]
 pub use sdk::DlssSdk;
