@@ -63,6 +63,29 @@ impl DlssSdk {
         Ok(Arc::new(Mutex::new(Self { parameters, device })))
     }
 
+    /// Sets the render preset for DLSS Super Resolution contexts created
+    /// after this call, for every performance quality mode.
+    ///
+    /// A context keeps the preset it was created with: create it anew to
+    /// change it.
+    pub fn set_super_resolution_render_preset(
+        &mut self,
+        render_preset: DlssRenderPreset,
+    ) -> Result<(), DlssError> {
+        let hint = render_preset.as_hint() as u32;
+        for mode in [
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA.as_ptr(),
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality.as_ptr(),
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality.as_ptr(),
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced.as_ptr(),
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance.as_ptr(),
+            NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance.as_ptr(),
+        ] {
+            unsafe { NVSDK_NGX_Parameter_SetUI(self.parameters, mode.cast(), hint) };
+        }
+        Ok(())
+    }
+
     /// Returns the number of bytes of VRAM allocated by DLSS.
     pub fn get_vram_allocated_bytes(&mut self) -> Result<u64, DlssError> {
         let mut vram_allocated_bytes = 0;

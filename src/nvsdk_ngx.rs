@@ -38,6 +38,42 @@ pub enum DlssPerfQualityMode {
     UltraPerformance,
 }
 
+/// Which of DLSS Super Resolution's models (render presets) a context uses.
+///
+/// See the DLSS programming guide for what each is for; they differ in
+/// image quality and in cost. Presets the SDK has removed or reserved are not
+/// listed.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default, Debug)]
+pub enum DlssRenderPreset {
+    /// Let DLSS decide by the performance quality mode.
+    #[default]
+    Default,
+    /// Deprecated by the SDK.
+    E,
+    /// Deprecated by the SDK.
+    F,
+    J,
+    K,
+    L,
+    M,
+}
+
+impl DlssRenderPreset {
+    pub(crate) fn as_hint(&self) -> NVSDK_NGX_DLSS_Hint_Render_Preset {
+        match self {
+            Self::Default => {
+                NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_Default
+            }
+            Self::E => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_E,
+            Self::F => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_F,
+            Self::J => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_J,
+            Self::K => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_K,
+            Self::L => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_L,
+            Self::M => NVSDK_NGX_DLSS_Hint_Render_Preset_NVSDK_NGX_DLSS_Hint_Render_Preset_M,
+        }
+    }
+}
+
 impl DlssPerfQualityMode {
     pub(crate) fn as_perf_quality_value(
         &self,
